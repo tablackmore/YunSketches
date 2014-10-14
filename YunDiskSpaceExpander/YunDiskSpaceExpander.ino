@@ -89,11 +89,14 @@ void expectYesBeforeProceeding() {
   }
 }
 
-int readPartitionSize() {
+int readPartitionSize(String partitionName) {
   int partitionSize = 0;
   while (!partitionSize)
   {
-    Serial.print(F("Enter the size of the data partition in MB: "));
+    String info = "Enter the size of the ";
+    info += partitionName;
+    info += " partition in MB: ";
+    Serial.print(info);
     while (Serial.available() == 0);
 
     String answer = Serial.readStringUntil('\n');
@@ -190,9 +193,7 @@ void partitionAndFormatSDCard() {
   debugProcess(format);
 
   // create the first partition
-  int dataPartitionSize = readPartitionSize();
-
-  Serial.println(F("Partitioning (this will take a while)..."));
+  int dataPartitionSize = readPartitionSize("data");
   String firstPartition = "(echo n; echo p; echo 1; echo; echo +";
   firstPartition += dataPartitionSize;
   firstPartition += "M; echo w) | fdisk /dev/sda";
@@ -200,9 +201,19 @@ void partitionAndFormatSDCard() {
   debugProcess(format);
 
   unmount();
+  
+  // create the swap partition
+  int dataSwapSize = readPartitionSize("swap");
+  Serial.println(F("Partitioning (this will take a while)..."));
+  String swapPartition = "(echo n; echo p; echo 2; echo; echo +";
+  swapPartition += dataSwapSize;
+  swapPartition += "M; echo t; echo 2; echo 82; echo w) | fdisk /dev/sda";
+  format.runShellCommand(swapPartition);
+  debugProcess(format);
+  unmount();
 
-  // create the second partition
-  format.runShellCommand(F("(echo n; echo p; echo 2; echo; echo; echo w) | fdisk /dev/sda"));
+  // create the third partition
+  format.runShellCommand(F("(echo n; echo p; echo 3; echo; echo; echo w) | fdisk /dev/sda"));
   debugProcess(format);
 
   unmount();
@@ -227,6 +238,14 @@ void partitionAndFormatSDCard() {
 
   // format the second partition to Linux EXT4
   exitCode = format.runShellCommand(F("mkfs.ext4 /dev/sda2"));
+  debugProcess(format);
+  if (exitCode != SUCCESSFUL_EXIT_CODE) {
+    Serial.println(F("\nerr. formatting to EXT4"));
+    halt();
+  }
+
+  // format the third partition to Linux EXT4
+  exitCode = format.runShellCommand(F("mkfs.ext4 /dev/sda3"));
   debugProcess(format);
   if (exitCode != SUCCESSFUL_EXIT_CODE) {
     Serial.println(F("\nerr. formatting to EXT4"));
@@ -282,4 +301,5 @@ void enableExtRoot() {
 
   Serial.println(F("enabled"));
 }
+
 
